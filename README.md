@@ -1,85 +1,147 @@
-z.lib
-======
-The "z" library implements the commonly required image processing basics of
-scaling, colorspace conversion, and depth conversion. A simple API enables
-conversion between any supported formats to operate with minimal knowledge
-from the programmer. All library routines were designed from the ground-up
-with correctness, flexibility, and thread-safety as first priorities.
-Allocation, buffering, and I/O are cleanly separated from processing, allowing
-the programmer to adapt "z" to many scenarios.
+# zimg-f64
 
-Requirements
------
-- Byte-addressable architecture
-- Two's complement integer encoding
-- 32-bit or greater machine word
-- C++17 compiler
-- Platforms: Microsoft Windows, POSIX
+**zimg-phase/geometry-compatible canonical Spline36 evaluated in IEEE-754
+binary64.**
 
-Building
------
-The officially supported build system is GNU autotools. Use the provided
-"autogen.sh" script to instantiate the familiar "configure" and "make" build
-system. Visual Studio project files are not stable and are subject to change.
-Download all submodules before compiling by `git submodule update --init
---recursive`.
+This maintained fork adds an isolated reference path for studying how zimg's
+canonical Spline36 resize semantics behave when coefficient evaluation,
+coefficient storage, convolution accumulation, and inter-axis storage remain
+in binary64.
 
-Capabilities
------
-### Colorspace
+The semantic reference is [`sekrit-twc/zimg`](https://github.com/sekrit-twc/zimg)
+at commit
+[`1ad1895d5ff0bbe69c61243f9996aede713d1b5f`](https://github.com/sekrit-twc/zimg/commit/1ad1895d5ff0bbe69c61243f9996aede713d1b5f).
+The graphengine submodule remains pinned to
+`cb5b2ce13384ec2491f0c37256ea210034799f69`.
 
-Colorspaces: SMPTE-C (NTSC), Rec.709, Rec.2020
+## What this is—and is not
 
-The colorspace module provides for conversion between any combination of
-colorspaces, as defined by the commonly used triplet of matrix coefficients,
-transfer characteristics, and color primaries. Conversions are implemented
-with intelligent logic that minimizes the number of intermediate
-representations required for common scenarios, such as conversion between
-YCbCr and RGB. Support is also provided for the non-traditional YCbCr system
-of ITU-R BT.2020 constant luminance (CL), which retains higher fidelity with
-chroma subsampling. Note that "z" is not a color management system and should
-not be used to perform drastic contrast or gamut reduction, such as BT.2020
-to BT.709.
+The Spline36 formula retains the rational constants used by the pinned
+upstream implementation. Sample geometry, half-pixel-center mapping,
+translation-invariant tap selection, downscale widening, normalization,
+reflection/folding, and axis-order decisions follow that pinned reference.
 
-### Depth
+This project is **not** upstream zimg, bit-exact zimg, an upstream-supported
+f64 path, or exact-rational production arithmetic. MPFR, mpmath, and SymPy are
+independent validation oracles. Upstream binary32 and signed-Q14 paths remain
+distinct references whose valid-input output is unchanged.
 
-Formats: BYTE, WORD, HALF, FLOAT
+Greater arithmetic precision does not remove Spline36's intrinsic
+negative-lobe ringing. Overshoot and undershoot are preserved through both
+axes and reported separately from arithmetic error.
 
-The depth module provides for conversion between any pixel (number) format,
-including one and two-byte integer formats as well as IEEE-754 binary16
-(OpenEXR) and binary32 formats. Limited range (16-235) and full swing (0-255)
-integer formats are supported, including conversion between such formats.
-Multiple dithering methods are available when converting to integer formats,
-from basic rounding to high quality error diffusion.
+## Reference data path
 
-### Resize
+The included `f64resize_yuv` executable is deliberately format-specific:
 
-The resize module provides high fidelity linear resamplers, including the
-popular Bicubic and Lanczos filters. Resampling ratios of up to 100x are
-supported for upsampling and downsampling. Full support is provided for
-various coordinate systems, including the various chroma siting conventions
-(e.g. JPEG and MPEG2) as well as interlaced images.
+- input: progressive planar `yuv422p10le`, 3840×2160;
+- output: progressive planar `yuv420p10le`, 1920×1080;
+- luma: 3840×2160 → 1920×1080;
+- existing Cb/Cr planes: 1920×2160 → 960×540 directly;
+- signal domain: nonlinear planar Y′CbCr;
+- no RGB, linear-light, or 4:4:4 detour;
+- no sharpening, denoising, intermediate clamp, or intermediate quantization;
+- final store: round-to-nearest-even, then clamp to `[0, 1023]`.
 
-Performance
------
-"z" is optimized for Intel(R) Architecture and features faster processing times
-than industry standard swscale software.
+The path is a reference implementation, not a general-purpose video
+converter. FFmpeg and delivery codecs remain downstream integration concerns.
 
-Time (ms) to resize FHD image to UHD with Lanczos filter.
+## Chroma phase
 
-|                                | z.lib 2.8 | swscale 4.0.2* |
-|--------------------------------|-----------|----------------|
-| Intel(R) Core(TM) i7-8565U     |       7.7 |           15.2 |
-| Intel(R) Xeon(R) Platinum 8176 |      10.8 |           22.2 |
+For the validated full-frame progressive 4:2:2 LEFT → 4:2:0 LEFT case:
 
-Time (ms) to convert FHD BT.709 (YUV) to FHD BT.2020.
+```text
+source chroma active_left       = +0.25
+destination chroma active_left  = +0.25
+horizontal active scale         = 0.5
 
-|                                | z.lib 2.8 | swscale 4.0.2** |
-|--------------------------------|-----------|-----------------|
-| Intel(R) Core(TM) i7-8565U     |       8.3 |            17.5 |
-| Intel(R) Xeon(R) Platinum 8176 |      11.5 |            25.6 |
+shift = source_left - destination_left / scale
+      = 0.25 - 0.25 / 0.5
+      = -0.25 source-chroma samples
 
-\* `scale=3840:2160:sws_flags=lanczos+accurate_rnd:sws_dither=none`
+vertical shift = 0
+```
 
-\** `colorspace=all=bt2020:iall=bt709:format=yuv420p10`
+`-0.25` is derived for that exact geometry. It is not a universal constant for
+other crops, active regions, subsampling layouts, or chroma sitings. The
+original validation inputs did not carry authoritative chroma-location
+metadata; LEFT was an explicit source-interpretation assumption.
 
+## Build
+
+Initialize submodules first:
+
+```sh
+git submodule update --init --recursive
+```
+
+### GCC or Clang
+
+```sh
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DZIMG_F64_BUILD_MPFR_ORACLE=ON
+cmake --build build
+```
+
+### MSVC
+
+```powershell
+cmake -S . -B build-msvc -A x64 `
+  -DZIMG_F64_BUILD_MPFR_ORACLE=OFF
+cmake --build build-msvc --config Release
+```
+
+The CMake target applies the validated floating-point contract:
+
+- MSVC: `/fp:strict`, `/arch:AVX2`, explicit `std::fma`;
+- GCC/Clang: no fast-math, reassociation, finite-only assumptions, or implicit
+  contraction; explicit `std::fma` is the only fused operation;
+- tap accumulation order is fixed;
+- parallelism is row-only, so scheduling cannot change a sample.
+
+Executable bytes are not claimed reproducible. The release gate requires
+byte-identical quantized and prequantized outputs across MSVC, GCC, Clang,
+one thread, repeated N-thread runs, and fresh independent builds.
+
+## Validate
+
+Install the optional Python validation environment:
+
+```sh
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -e ".[validation]"
+```
+
+Then run:
+
+```sh
+pytest tests/f64
+python tools/generate_synthetic_fixture.py --output fixture.yuv
+python tools/run_determinism.py \
+  --fixture fixture.yuv \
+  --executable reference=build/f64resize_yuv
+```
+
+The raw fixture is generated deterministically and is never stored in Git.
+See [VALIDATION.md](VALIDATION.md) for the frozen release evidence.
+
+## Documentation
+
+- [Algorithm and arithmetic contract](docs/ALGORITHM.md)
+- [Chroma and active-region geometry](docs/CHROMA_GEOMETRY.md)
+- [Numerical validation](docs/NUMERICAL_VALIDATION.md)
+- [Determinism](docs/DETERMINISM.md)
+- [Raw/FFmpeg integration](docs/INTEGRATION.md)
+- [Upstream provenance](docs/PROVENANCE.md)
+- [Licensing and dependencies](docs/LICENSING.md)
+- [Original upstream README](docs/UPSTREAM_README.md)
+- [Changelog](CHANGELOG.md)
+
+## License
+
+The upstream `COPYING` file and source notices are preserved. New fork-owned
+source, test, build, and documentation files are offered under the same
+WTFPL v2 terms unless a file states otherwise. Optional build and validation
+dependencies are not vendored and retain their own licenses.
