@@ -1,0 +1,184 @@
+{
+  "schema": "zimg-f64-release-validation/v1",
+  "release_tag": "v0.1.0",
+  "commit_identity": "v0.1.0^{commit}",
+  "semantic_base": "1ad1895d5ff0bbe69c61243f9996aede713d1b5f",
+  "submodules": {
+    "graphengine": "cb5b2ce13384ec2491f0c37256ea210034799f69",
+    "graphengine/test/googletest": "e2239ee6043f73722e7aa812a459f54a28552929",
+    "test/extra/googletest": "6910c9d9165801d8827d628cb72eb7ea9dd538c5"
+  },
+  "fork_owned_source_set": {
+    "definition": "all fork-owned release files except VALIDATION.md and this self-referential record",
+    "files": 37,
+    "bytes": 151357,
+    "sha256": "5ccebcbb2d67e2b07987cb24171265bb3ea3e1f69ec95c938832a62444d2693b"
+  },
+  "local_platform": {
+    "os": "Microsoft Windows 11 Pro for Workstations",
+    "version": "10.0.26200",
+    "architecture": "x86_64"
+  },
+  "builds": {
+    "msvc": {
+      "version": "19.44.35227.0",
+      "flags": "/O2 /fp:strict /arch:AVX2 /W4 /permissive-",
+      "executable_bytes": 96768,
+      "executable_sha256": "56344990ac4826728acd868d728b27a9dc9c2ba6d70fa6c3c42a1fa155e6bb2e"
+    },
+    "gcc": {
+      "version": "16.1.0",
+      "flags": "-O3 -mavx2 -fno-fast-math -ffp-contract=off -frounding-math -fno-associative-math -fno-finite-math-only -Wall -Wextra -Wpedantic",
+      "executable_bytes": 335610,
+      "executable_sha256": "a620001bff74f81763d2c13c16da58fb22f935308a68d03167ec170aada9df6c"
+    },
+    "clang": {
+      "version": "22.1.8",
+      "flags": "-O3 -mavx2 -fno-fast-math -ffp-contract=off -frounding-math -fno-associative-math -fno-finite-math-only -Wall -Wextra -Wpedantic",
+      "executable_bytes": 320612,
+      "executable_sha256": "9b168372e00214a56b4030322cd6d5bd59a1cc08b0823eb75441b889854450fd"
+    }
+  },
+  "floating_point_contract": {
+    "rounding": "FE_TONEAREST",
+    "implicit_fma_contraction": false,
+    "explicit_fma": true,
+    "tap_order": "increasing table index",
+    "parallelism": "row-only",
+    "intermediate_clipping": false,
+    "intermediate_quantization": false,
+    "final_quantization": "nearest-even then clamp to [0,1023]"
+  },
+  "upstream_regression": {
+    "passed": 162,
+    "failed": 0,
+    "suites": 20
+  },
+  "fork_tests": {
+    "tests_per_compiler": 16,
+    "compilers_passed": [
+      "msvc",
+      "gcc",
+      "clang"
+    ],
+    "hypothesis": {
+      "derandomized": true,
+      "database": null
+    }
+  },
+  "fixture": {
+    "format": "yuv422p10le",
+    "dimensions": "3840x2160",
+    "frames": 3,
+    "bytes": 99532800,
+    "sha256": "a820c2c08a91f203d7b7cf6df0f01573ebb8365a31e67a61de3313baf8c95c21"
+  },
+  "determinism": {
+    "compilers": [
+      "msvc",
+      "gcc",
+      "clang"
+    ],
+    "thread_runs": [
+      1,
+      32,
+      32
+    ],
+    "quantized": {
+      "format": "yuv420p10le",
+      "dimensions": "1920x1080",
+      "frames": 3,
+      "bytes": 18662400,
+      "sha256": "914477670148e89188aee144a57629bdef0ca41c8c9d2f4731752cf46dd811ca"
+    },
+    "prequantized_binary64": {
+      "bytes": 74649600,
+      "sha256": "cc07600cdc80284243b1efbf8c4cb59a4cea23152c9cac08627ec274bf07e343"
+    }
+  },
+  "mpfr_256_gmp": {
+    "mpfr_version": "4.2.2",
+    "gmp_version": "6.3.0",
+    "rows": 8404,
+    "coefficients": 88916,
+    "geometry_mismatches": 0,
+    "maximum_absolute_coefficient_error": 8.881784197001252e-16,
+    "maximum_meaningful_ulp_distance": 18,
+    "maximum_row_sum_error": 9.992007221626409e-16
+  },
+  "mpmath_convolution": {
+    "decimal_digits": 100,
+    "witnesses": 468,
+    "maximum_absolute_error": 6.821210263296962e-13,
+    "rms_error": 1.6870690915558896e-13,
+    "mean_error": 9.633912850756393e-14,
+    "non_tie_quantization_mismatches": 0,
+    "near_half_code_boundary_cases": 86,
+    "classification_radius": 1e-09
+  },
+  "ringing_and_final_clamps": {
+    "Y": {
+      "input_min": 0,
+      "input_max": 1023,
+      "prequant_min": -167.95105334,
+      "prequant_max": 1176.343809022,
+      "final_clip_low": 14622,
+      "final_clip_high": 15332
+    },
+    "Cb": {
+      "input_min": 0,
+      "input_max": 1023,
+      "prequant_min": 26.843497739,
+      "prequant_max": 969.818030979,
+      "final_clip_low": 0,
+      "final_clip_high": 0
+    },
+    "Cr": {
+      "input_min": 0,
+      "input_max": 1023,
+      "prequant_min": 64.882234837,
+      "prequant_max": 1002.118739233,
+      "final_clip_low": 0,
+      "final_clip_high": 0
+    }
+  },
+  "sanitizers": {
+    "local_clang": "ASan+UBSan+integer PASS",
+    "local_msvc": "ASan PASS",
+    "mandatory_tag_ci": [
+      "Linux GCC ASan+UBSan",
+      "Linux Clang ASan+UBSan+integer"
+    ]
+  },
+  "static_analysis": {
+    "cppcheck": "2.21.0 PASS",
+    "clang_tidy": "22.1.8 PASS",
+    "ruff": "0.16.1 PASS",
+    "mypy": "2.3.0 strict PASS",
+    "actionlint": "1.7.12 PASS"
+  },
+  "integration": {
+    "ffmpeg_version": "8.1.2",
+    "input_decode": "PASS",
+    "output_decode": "PASS",
+    "audio_or_metadata_paths": false
+  },
+  "repository_safety": {
+    "gitleaks_version": "8.30.1",
+    "commits_scanned": 1514,
+    "gitleaks_findings": 0,
+    "fork_hygiene_findings": 0,
+    "full_history_blobs_over_1000000_bytes": 0,
+    "fork_history_blobs_over_1000000_bytes": 0
+  },
+  "intentionally_excluded": [
+    "private source media",
+    "derived project videos and raw planes",
+    "source-derived private hashes",
+    "screenshots and proprietary identifiers",
+    "local absolute paths and temporary logs",
+    "credentials and environment files",
+    "quarantined or failed artifacts",
+    "platform binaries"
+  ]
+}

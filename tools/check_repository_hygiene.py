@@ -5,8 +5,8 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 DEFAULT_BASE = "1ad1895d5ff0bbe69c61243f9996aede713d1b5f"
 MAX_FILE_BYTES = 1_000_000
