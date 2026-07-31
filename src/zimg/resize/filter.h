@@ -1,5 +1,3 @@
-#pragma once
-
 #ifndef ZIMG_RESIZE_FILTER_H_
 #define ZIMG_RESIZE_FILTER_H_
 
@@ -165,6 +163,24 @@ struct FilterContext {
 };
 
 /**
+ * Computed filter taps retained at the precision used by the canonical
+ * geometry and kernel builder.
+ *
+ * This is an opt-in extension for the f64 reference resizer. It deliberately
+ * does not replace FilterContext, so the pinned upstream f32 and Q14 paths
+ * remain unchanged and can be used as conformance baselines.
+ */
+struct FilterContextF64 {
+	unsigned filter_width{};
+	unsigned filter_rows{};
+	unsigned input_width{};
+	unsigned stride{};
+
+	AlignedVector<double> data;
+	AlignedVector<unsigned> left;
+};
+
+/**
  * Compute the resizing function (matrix) for a filter, scale, and shift.
  * The destination buffer should be allocated in accordance with get_filter_size
  *
@@ -176,6 +192,12 @@ struct FilterContext {
  * @return the computed filter
  */
 FilterContext compute_filter(const Filter &f, unsigned src_dim, unsigned dst_dim, double shift, double width);
+
+/**
+ * Compute the same resizing function as compute_filter, retaining normalized
+ * coefficients in binary64 instead of reducing them to f32 or signed Q14.
+ */
+FilterContextF64 compute_filter_f64(const Filter &f, unsigned src_dim, unsigned dst_dim, double shift, double width);
 
 } // namespace zimg::resize
 

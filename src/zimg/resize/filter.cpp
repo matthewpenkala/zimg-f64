@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
+#include <new>
 #include <stdexcept>
 #include <vector>
 #include "common/except.h"
@@ -47,6 +48,8 @@ FilterContext matrix_to_filter(const RowMatrix<double> &m)
 	for (size_t i = 0; i < m.rows(); ++i) {
 		width = std::max(width, m.row_right(i) - m.row_left(i));
 	}
+	if (!width)
+		error::throw_<error::InternalError>("empty filter matrix");
 	zassert_d(width, "empty matrix");
 
 	if (width > floor_n(UINT_MAX, AlignmentOf<uint16_t>))
@@ -105,6 +108,9 @@ FilterContext matrix_to_filter(const RowMatrix<double> &m)
 			}
 
 			f32_sum += coeff_f32;
+			// Pinned-upstream Q14 arithmetic: the assertions below prove that
+			// this accumulation remains representable.
+			// NOLINTNEXTLINE(bugprone-narrowing-conversions)
 			i16_sum += coeff_i16;
 
 			e.data[i * e.stride + j] = coeff_f32;
@@ -118,12 +124,123 @@ FilterContext matrix_to_filter(const RowMatrix<double> &m)
 		zassert_d(1.0 - f32_sum <= FLT_EPSILON, "error too great");
 		zassert_d(std::abs((1 << 14) - i16_sum) <= 1, "error too great");
 
+		// The preceding assertion bounds the correction to one Q14 unit.
+		// NOLINTNEXTLINE(bugprone-narrowing-conversions)
 		e.data_i16[i * e.stride_i16 + i16_greatest_idx] += (1 << 14) - i16_sum;
 
 		e.left[i] = left;
 	}
 
 	return e;
+}
+
+FilterContextF64 matrix_to_filter_f64(const RowMatrix<double> &m)
+{
+	size_t width = 0;
+
+	for (size_t i = 0; i < m.rows(); ++i) {
+		width = std::max(width, m.row_right(i) - m.row_left(i));
+	}
+	if (!width)
+		error::throw_<error::InternalError>("empty filter matrix");
+	zassert_d(width, "empty matrix");
+
+	if (width > floor_n(UINT_MAX, AlignmentOf<double>))
+		error::throw_<error::OutOfMemory>();
+
+	FilterContextF64 e{};
+
+	try {
+		e.filter_width = static_cast<unsigned>(width);
+		e.filter_rows = static_cast<unsigned>(m.rows());
+		e.input_width = static_cast<unsigned>(m.cols());
+		e.stride = static_cast<unsigned>(ceil_n(width, AlignmentOf<double>));
+
+		if (e.filter_rows > UINT_MAX / e.stride)
+			error::throw_<error::OutOfMemory>();
+
+		e.data.resize(static_cast<size_t>(e.stride) * e.filter_rows);
+		e.left.resize(e.filter_rows);
+	} catch (const std::length_error &) {
+		error::throw_<error::OutOfMemory>();
+	}
+
+	for (size_t i = 0; i < m.rows(); ++i) {
+		unsigned left = static_cast<unsigned>(std::min(m.row_left(i), m.cols() - width));
+
+		for (size_t j = 0; j < width; ++j)
+			e.data[i * e.stride + j] = m[i][left + j];
+
+		e.left[i] = left;
+	}
+
+	return e;
+}
+
+RowMatrix<double> compute_filter_matrix(const Filter &f, unsigned src_dim, unsigned dst_dim, double shift, double width)
+{
+	if (!src_dim || !dst_dim)
+		error::throw_<error::IllegalArgument>("filter dimensions must be nonzero");
+	if (!std::isfinite(shift) || !std::isfinite(width) || !(width > 0.0))
+		error::throw_<error::IllegalArgument>("filter geometry must be finite and positive");
+
+	double scale = static_cast<double>(dst_dim) / width;
+	if (!std::isfinite(scale) || !(scale > 0.0))
+		error::throw_<error::ResamplingNotAvailable>("invalid filter scale");
+	double step = std::min(scale, 1.0);
+	double support = static_cast<double>(f.support()) / step;
+
+	if (!std::isfinite(support) || support > static_cast<double>(UINT_MAX / 2U))
+		error::throw_<error::ResamplingNotAvailable>("filter width too great");
+	unsigned filter_size = std::max(static_cast<unsigned>(std::ceil(support)) * 2U, 1U);
+
+	RowMatrix<double> m{ dst_dim, src_dim };
+
+	for (unsigned i = 0; i < dst_dim; ++i) {
+		// Position of output sample on input grid.
+		double pos = (i + 0.5) / scale + shift;
+		double begin_pos = round_halfup(pos - filter_size / 2.0) + 0.5;
+		if (!std::isfinite(pos) || !std::isfinite(begin_pos))
+			error::throw_<error::ResamplingNotAvailable>("filter position is not finite");
+
+		double total = 0.0;
+		for (unsigned j = 0; j < filter_size; ++j) {
+			double xpos = begin_pos + j;
+			total += f((xpos - pos) * step);
+		}
+		if (!std::isfinite(total) || total == 0.0)
+			error::throw_<error::ResamplingNotAvailable>("filter normalization is not finite");
+
+		size_t left = SIZE_MAX;
+
+		for (unsigned j = 0; j < filter_size; ++j) {
+			double xpos = begin_pos + j;
+			double real_pos;
+
+			// Mirror the position if it goes beyond image bounds.
+			if (xpos < 0.0)
+				real_pos = -xpos;
+			else if (xpos >= src_dim)
+				real_pos = 2.0 * src_dim - xpos;
+			else
+				real_pos = xpos;
+
+			// Clamp the position if it is still out of bounds.
+			real_pos = std::clamp(real_pos, 0.0, std::nextafter(src_dim, -INFINITY));
+
+			size_t idx = static_cast<size_t>(std::floor(real_pos));
+			m[i][idx] += f((xpos - pos) * step) / total;
+			left = std::min(left, idx);
+		}
+
+		// Force allocating an entry to keep the left offset table sorted.
+		if (m[i][left] == 0.0) {
+			m[i][left] = DBL_EPSILON;
+			m[i][left] = 0.0;
+		}
+	}
+
+	return m;
 }
 
 } // namespace
@@ -133,7 +250,7 @@ Filter::~Filter() = default;
 
 unsigned PointFilter::support() const { return 0; }
 
-double PointFilter::operator()(double x) const { return 1.0; }
+double PointFilter::operator()(double) const { return 1.0; }
 
 
 unsigned BilinearFilter::support() const { return 1; }
@@ -248,59 +365,22 @@ double LanczosFilter::operator()(double x) const
 
 FilterContext compute_filter(const Filter &f, unsigned src_dim, unsigned dst_dim, double shift, double width)
 {
-	double scale = static_cast<double>(dst_dim) / width;
-	double step = std::min(scale, 1.0);
-	double support = static_cast<double>(f.support()) / step;
-	unsigned filter_size = std::max(static_cast<unsigned>(std::ceil(support)) * 2U, 1U);
-
-	if (support > static_cast<unsigned>(UINT_MAX / 2))
-		error::throw_<error::ResamplingNotAvailable>("filter width too great");
-
 	try {
-		RowMatrix<double> m{ dst_dim, src_dim };
-
-		for (unsigned i = 0; i < dst_dim; ++i) {
-			// Position of output sample on input grid.
-			double pos = (i + 0.5) / scale + shift;
-			double begin_pos = round_halfup(pos - filter_size / 2.0) + 0.5;
-
-			double total = 0.0;
-			for (unsigned j = 0; j < filter_size; ++j) {
-				double xpos = begin_pos + j;
-				total += f((xpos - pos) * step);
-			}
-
-			size_t left = SIZE_MAX;
-
-			for (unsigned j = 0; j < filter_size; ++j) {
-				double xpos = begin_pos + j;
-				double real_pos;
-
-				// Mirror the position if it goes beyond image bounds.
-				if (xpos < 0.0)
-					real_pos = -xpos;
-				else if (xpos >= src_dim)
-					real_pos = 2.0 * src_dim - xpos;
-				else
-					real_pos = xpos;
-
-				// Clamp the position if it is still out of bounds.
-				real_pos = std::clamp(real_pos, 0.0, std::nextafter(src_dim, -INFINITY));
-
-				size_t idx = static_cast<size_t>(std::floor(real_pos));
-				m[i][idx] += f((xpos - pos) * step) / total;
-				left = std::min(left, idx);
-			}
-
-			// Force allocating an entry to keep the left offset table sorted.
-			if (m[i][left] == 0.0) {
-				m[i][left] = DBL_EPSILON;
-				m[i][left] = 0.0;
-			}
-		}
-
-		return matrix_to_filter(m);
+		return matrix_to_filter(compute_filter_matrix(f, src_dim, dst_dim, shift, width));
 	} catch (const std::length_error &) {
+		error::throw_<error::OutOfMemory>();
+	} catch (const std::bad_alloc &) {
+		error::throw_<error::OutOfMemory>();
+	}
+}
+
+FilterContextF64 compute_filter_f64(const Filter &f, unsigned src_dim, unsigned dst_dim, double shift, double width)
+{
+	try {
+		return matrix_to_filter_f64(compute_filter_matrix(f, src_dim, dst_dim, shift, width));
+	} catch (const std::length_error &) {
+		error::throw_<error::OutOfMemory>();
+	} catch (const std::bad_alloc &) {
 		error::throw_<error::OutOfMemory>();
 	}
 }
