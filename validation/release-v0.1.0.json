@@ -11,8 +11,8 @@
   "fork_owned_source_set": {
     "definition": "all fork-owned release files except VALIDATION.md and this self-referential record",
     "files": 37,
-    "bytes": 151357,
-    "sha256": "5ccebcbb2d67e2b07987cb24171265bb3ea3e1f69ec95c938832a62444d2693b"
+    "bytes": 151370,
+    "sha256": "6386e5a1ba3e4773136a9d526a2b149ecde15385aac6b4b77d50554765361449"
   },
   "local_platform": {
     "os": "Microsoft Windows 11 Pro for Workstations",
@@ -145,7 +145,7 @@
   "sanitizers": {
     "local_clang": "ASan+UBSan+integer PASS",
     "local_msvc": "ASan PASS",
-    "mandatory_tag_ci": [
+    "mandatory_release_ci": [
       "Linux GCC ASan+UBSan",
       "Linux Clang ASan+UBSan+integer"
     ]
@@ -165,7 +165,7 @@
   },
   "repository_safety": {
     "gitleaks_version": "8.30.1",
-    "commits_scanned": 1514,
+    "gitleaks_scope": "complete history reachable from the release candidate",
     "gitleaks_findings": 0,
     "fork_hygiene_findings": 0,
     "full_history_blobs_over_1000000_bytes": 0,

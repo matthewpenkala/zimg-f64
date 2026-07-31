@@ -21,7 +21,7 @@ two self-referential validation records.
 | 1/N/repeated-N threads | **PASS** — 1, 32, and repeated 32 threads |
 | MPFR-256/GMP | **PASS** — zero geometry mismatch; thresholds met |
 | mpmath/SymPy/Hypothesis | **PASS** — 16/16 per compiler; witnesses pass |
-| Sanitizers | **PASS** — local Clang ASan/UBSan/integer and MSVC ASan; tag additionally requires green Linux GCC/Clang sanitizer CI |
+| Sanitizers | **PASS** — local Clang ASan/UBSan/integer and MSVC ASan; release additionally requires green Linux GCC/Clang sanitizer CI |
 | Static analysis/warnings | **PASS** — cppcheck, clang-tidy, Ruff, mypy, and high-warning builds |
 | Raw/FFmpeg integration | **PASS** — exact three-frame input/output framing and full decode |
 | Privacy/secrets/large objects | **PASS** — custom history scan and Gitleaks; no blob over 1 MB |
@@ -29,7 +29,9 @@ two self-referential validation records.
 
 The tag and GitHub release are created only after every job in
 `.github/workflows/f64-validation.yml`, including Linux GCC and Clang
-sanitizer jobs, passes on this same commit.
+sanitizer jobs, passes on this same commit. Tag pushes deliberately do not
+repeat the matrix: the annotated tag must resolve to the already validated
+release-branch commit.
 
 ## Provenance
 
@@ -41,8 +43,8 @@ sanitizer jobs, passes on this same commit.
 | graphengine GoogleTest | `e2239ee6043f73722e7aa812a459f54a28552929` |
 | zimg test GoogleTest | `6910c9d9165801d8827d628cb72eb7ea9dd538c5` |
 | Fork-owned source-set files | 37 |
-| Fork-owned source-set bytes | 151,357 |
-| Fork-owned source-set SHA-256 | `5ccebcbb2d67e2b07987cb24171265bb3ea3e1f69ec95c938832a62444d2693b` |
+| Fork-owned source-set bytes | 151,370 |
+| Fork-owned source-set SHA-256 | `6386e5a1ba3e4773136a9d526a2b149ecde15385aac6b4b77d50554765361449` |
 
 ## Builds and floating-point contract
 
@@ -137,7 +139,7 @@ binary64 axes and are clipped only at final container storage.
   1/32/repeated-32-thread workload; no finding.
 - MSVC 19.44.35227.0: ASan; same workload; no finding.
 - Linux CI: independent GCC ASan/UBSan and Clang ASan/UBSan/integer jobs are a
-  mandatory tag gate.
+  mandatory release gate.
 - cppcheck 2.21.0: pass.
 - clang-tidy 22.1.8: pass with bugprone, CERT, Clang Static Analyzer,
   performance, and portability profiles.
@@ -158,8 +160,8 @@ not compiled into the fork reference application.
 
 - FFmpeg 8.1.2 fully decoded the three-frame input and output raw streams with
   no framing or decode error.
-- Gitleaks 8.30.1 scanned all 1,514 upstream-plus-fork commits and
-  approximately 5.34 MB with no finding.
+- Gitleaks 8.30.1 scanned the complete upstream-plus-fork history reachable
+  from the release candidate (approximately 5.36 MB) with no finding.
 - The fork-specific scanner checked current files, fork-owned historical
   blobs, commit metadata, private identifiers, local paths, generated media,
   forbidden binary suffixes, secrets, and size limits with no finding.
