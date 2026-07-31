@@ -1,0 +1,225 @@
+name: Binary64 validation
+
+on:
+  push:
+    branches:
+      - agent/binary64-spline36-v0.1.0
+    tags:
+      - "v*"
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: f64-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPECTED_FIXTURE_SHA256: a820c2c08a91f203d7b7cf6df0f01573ebb8365a31e67a61de3313baf8c95c21
+  EXPECTED_QUANTIZED_SHA256: 914477670148e89188aee144a57629bdef0ca41c8c9d2f4731752cf46dd811ca
+  EXPECTED_PREQUANT_SHA256: cc07600cdc80284243b1efbf8c4cb59a4cea23152c9cac08627ec274bf07e343
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - name: Check out pinned history and submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build and validation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake ninja-build pkg-config libmpfr-dev libgmp-dev
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[validation]"
+
+      - name: Configure
+        env:
+          CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER="${CXX}" \
+            -DZIMG_F64_BUILD_MPFR_ORACLE=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: MPFR-256 coefficient oracle
+        run: ./build/f64_mpfr_oracle
+
+      - name: Deterministic property tests
+        env:
+          ZIMG_F64_BUILD_DIR: ${{ github.workspace }}/build
+        run: pytest tests/f64
+
+      - name: Generate public fixture
+        run: |
+          python tools/generate_synthetic_fixture.py --output build/fixture.yuv
+          echo "${EXPECTED_FIXTURE_SHA256}  build/fixture.yuv" | sha256sum --check
+
+      - name: Cross-thread output identity
+        run: |
+          python tools/run_determinism.py \
+            --fixture build/fixture.yuv \
+            --n-threads 8 \
+            --executable "${{ matrix.compiler }}=build/f64resize_yuv" \
+            --expected-quantized-sha256 "${EXPECTED_QUANTIZED_SHA256}" \
+            --expected-prequant-sha256 "${EXPECTED_PREQUANT_SHA256}"
+
+      - name: Numerical convolution witnesses
+        if: matrix.compiler == 'gcc'
+        run: |
+          python tools/run_numerical_witnesses.py \
+            --scaler build/f64resize_yuv \
+            --fixture build/fixture.yuv
+
+  windows-msvc:
+    name: Windows MSVC
+    runs-on: windows-2025
+    steps:
+      - name: Check out pinned history and submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[validation]"
+
+      - name: Configure and build
+        shell: pwsh
+        run: |
+          cmake -S . -B build-msvc -A x64 -DZIMG_F64_BUILD_MPFR_ORACLE=OFF
+          cmake --build build-msvc --config Release
+
+      - name: Deterministic property tests
+        shell: pwsh
+        env:
+          ZIMG_F64_BUILD_DIR: ${{ github.workspace }}\build-msvc\Release
+        run: pytest tests/f64
+
+      - name: Generate and verify public fixture
+        shell: pwsh
+        run: |
+          python tools/generate_synthetic_fixture.py --output build-msvc\fixture.yuv
+          $actual = (Get-FileHash build-msvc\fixture.yuv -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $env:EXPECTED_FIXTURE_SHA256) { throw "fixture SHA-256 mismatch" }
+
+      - name: Cross-thread output identity
+        shell: pwsh
+        run: |
+          python tools/run_determinism.py `
+            --fixture build-msvc\fixture.yuv `
+            --n-threads 8 `
+            --executable "msvc=build-msvc\Release\f64resize_yuv.exe" `
+            --expected-quantized-sha256 $env:EXPECTED_QUANTIZED_SHA256 `
+            --expected-prequant-sha256 $env:EXPECTED_PREQUANT_SHA256
+
+  upstream-regression:
+    name: Pinned upstream regression
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out pinned history and submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install autotools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes autoconf automake libtool g++ make
+
+      - name: Run unchanged upstream suite
+        env:
+          JOBS: "2"
+        run: bash scripts/run-upstream-tests.sh
+
+  sanitizer:
+    name: ${{ matrix.compiler }} sanitizers
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - name: Check out pinned history and submodules
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake ninja-build clang g++
+          python -m pip install numpy
+
+      - name: Build and execute full synthetic workload
+        env:
+          CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+          THREADS: "8"
+        run: bash scripts/run-sanitizers.sh
+
+  quality:
+    name: Quality, static analysis, hygiene
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install analysis tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake ninja-build clang-tidy cppcheck
+          python -m pip install -e ".[validation,quality]"
+
+      - name: Python quality
+        run: |
+          ruff check tools tests/f64
+          mypy tools tests/f64
+
+      - name: C++ static analysis
+        env:
+          CXX: clang++
+        run: bash scripts/run-static-analysis.sh
+
+      - name: Documentation and repository hygiene
+        run: |
+          python tools/check_docs.py
+          python tools/check_repository_hygiene.py --repository .

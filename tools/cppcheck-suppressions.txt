@@ -1,0 +1,5 @@
+# Pinned-upstream FilterContext is aggregate-initialized by its factory.
+# Cppcheck reports its pre-existing scalar members while analyzing fork-owned
+# translation units that include the header. FilterContextF64 uses explicit
+# member initializers and is not covered by this narrow path-qualified rule.
+uninitMemberVarNoCtor:*src/zimg/resize/filter.h

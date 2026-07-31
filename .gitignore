@@ -44,6 +44,7 @@ autom4te.cache
 compile
 config.*
 configure
+configure~
 depcomp
 install-sh
 libtool
@@ -55,3 +56,18 @@ test-suite.log
 
 !doc/example/Makefile
 !src/testapp
+
+# Binary64 fork validation/build outputs.
+/.venv/
+/build*/
+/.pytest_cache/
+/.ruff_cache/
+/.mypy_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.f64
+*.raw
+*.mp4
+*.mov
+validation/*.local.json
