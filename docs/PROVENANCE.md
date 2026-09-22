@@ -19,6 +19,31 @@ git remote add upstream https://github.com/sekrit-twc/zimg.git
 
 Never push to `upstream`.
 
+## Subsequent upstream integration
+
+On 2026-09-22, the development branch merged upstream `master` at
+`67e0603271c080e22c8429856dd4a8a56587e61e`. This is an additional
+upstream integration, **not** a change to the pinned semantic reference above
+or to the immutable `v0.1.0` release tag. The merge preserves ancestry from
+both the fork and upstream; it is not a squash, rebase, or source dump.
+
+Upstream had rewritten its recent `master` history. A `git range-diff` from
+common predecessor `b8bd3d9` showed that its pixel-format and sRGB-gamma test
+commits were patch-equivalent to commits already in this fork. The rewritten
+chromatic-adaptation commit additionally passes the explicit
+`chromatic_adaptation` option from `GraphBuilder` to `ColorspaceConversion`;
+the default remains disabled. The fourth upstream commit adds `<exception>`
+includes in the C API and tile example for libc++ 23. Relative to the
+pre-merge fork tip, the complete source-tree change is exactly these three
+added lines. Neither the canonical Spline36 implementation nor the fork's
+binary64 resize path changes.
+
+The zimg test googletest submodule remains at
+`6910c9d9165801d8827d628cb72eb7ea9dd538c5`. The graphengine and its
+googletest commits remain as recorded above. The local merge commit was
+`1da640213bd6b546d41a14c6406a994e6f7f5577`; later documentation-only
+commits can be audited separately.
+
 ## Fork changes
 
 The minimal numerical extension:

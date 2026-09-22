@@ -14,6 +14,12 @@ at commit
 The graphengine submodule remains pinned to
 `cb5b2ce13384ec2491f0c37256ea210034799f69`.
 
+The development branch subsequently merged upstream `master` through
+[`67e0603271c080e22c8429856dd4a8a56587e61e`](https://github.com/sekrit-twc/zimg/commit/67e0603271c080e22c8429856dd4a8a56587e61e).
+This incorporates an upstream chromatic-adaptation option pass-through and
+two libc++ include fixes; it does not change the binary64 resize path or the
+historical `v0.1.0` tag. See [upstream-sync provenance](docs/PROVENANCE.md#subsequent-upstream-integration).
+
 ## What this is—and is not
 
 The Spline36 formula retains the rational constants used by the pinned

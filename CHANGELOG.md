@@ -3,6 +3,15 @@
 All notable fork-specific changes are documented here. Upstream history
 before the semantic-base commit remains available in Git.
 
+## Unreleased - 2026-09-22
+
+- Merged upstream `master` through `67e0603271c080e22c8429856dd4a8a56587e61e`
+  without rebasing, preserving both upstream histories and the `v0.1.0` tag.
+- Integrated the upstream explicit chromatic-adaptation option pass-through
+  in graph construction and missing `<exception>` includes for libc++ 23.
+- No changes to the binary64 Spline36 filter, geometry, resampler, or frozen
+  synthetic output hashes.
+
 ## 0.1.0 - 2026-07-30
 
 ### Added
